@@ -161,6 +161,45 @@ def get_cap_html(capped, total_all, surplus):
 cap_info_html_pve = get_cap_html(is_capped, total_sum_bonus_all, surplus_bonus)
 cap_info_html_pvp = get_cap_html(is_capped_pvp, total_sum_bonus_all_pvp, surplus_bonus_pvp)
 
+# --- タイムラインバー HTML生成 ---
+def get_timeline_bar_html(duration, cooldown, downtime, spec):
+    """spec: 'old' or 'new'"""
+    if cooldown <= 0:
+        return ""
+    pct_active = min(duration / cooldown, 1.0) * 100
+    pct_gap = max(0.0, 100.0 - pct_active)
+    seg_css = "tl-old" if spec == "old" else "tl-new"
+    txt_css = "tl-old-text" if spec == "old" else "tl-new-text"
+    active_inner = f"<span class='tl-seg-text'>{duration:.1f}秒</span>" if pct_active >= 14 else ""
+    gap_inner = f"<span class='tl-seg-text'>{downtime:.1f}秒</span>" if (downtime > 0 and pct_gap >= 14) else ""
+    if downtime <= 0:
+        bar = f'<div class="tl-seg {seg_css}" style="width:100%"><span class="tl-seg-text">{duration:.1f}秒</span></div>'
+        info = (
+            f'<div class="tl-info">'
+            f'<span class="tl-info-active {txt_css}">発動中: {duration:.2f}秒</span>'
+            f'<span class="tl-info-none">空白: なし（常時維持）</span>'
+            f'<span class="tl-info-cd">再利用まで: {cooldown:.2f}秒</span>'
+            f'</div>'
+        )
+    else:
+        bar = (
+            f'<div class="tl-seg {seg_css}" style="width:{pct_active:.1f}%">{active_inner}</div>'
+            f'<div class="tl-seg tl-gap" style="width:{pct_gap:.1f}%">{gap_inner}</div>'
+        )
+        info = (
+            f'<div class="tl-info">'
+            f'<span class="tl-info-active {txt_css}">発動中: {duration:.2f}秒</span>'
+            f'<span class="tl-info-gap">空白: {downtime:.2f}秒</span>'
+            f'<span class="tl-info-cd">再利用まで: {cooldown:.2f}秒</span>'
+            f'</div>'
+        )
+    return f'<div class="tl-wrap"><div class="tl-bar">{bar}</div>{info}</div>'
+
+timeline_old_pve = get_timeline_bar_html(old_duration_pve, actual_cooldown_pve, downtime_old_pve, "old")
+timeline_new_pve = get_timeline_bar_html(new_duration_pve, actual_cooldown_pve, downtime_new_pve, "new")
+timeline_old_pvp = get_timeline_bar_html(old_duration_pvp, actual_cooldown_pvp, downtime_old_pvp, "old")
+timeline_new_pvp = get_timeline_bar_html(new_duration_pvp, actual_cooldown_pvp, downtime_new_pvp, "new")
+
 # --- HTML出力 ---
 html_body = f"""
 <!DOCTYPE html>
@@ -208,6 +247,21 @@ html_body = f"""
         .cap-box {{ margin-top: 15px; padding: 12px; border-radius: 4px; font-size: 0.95em; }}
         .cap-box.warning {{ background: #fff5f5; border: 1px solid #feb2b2; }}
         .cap-box.safe {{ background: #f0fff4; border: 1px solid #9ae6b4; }}
+
+        .tl-wrap {{ margin: 10px 0 4px 0; }}
+        .tl-bar {{ display: flex; height: 44px; border-radius: 5px; overflow: hidden; border: 1px solid #bbb; }}
+        .tl-seg {{ display: flex; align-items: center; justify-content: center; overflow: hidden; min-width: 0; }}
+        .tl-seg-text {{ font-size: 0.85em; font-weight: bold; white-space: nowrap; color: white; padding: 0 8px; text-shadow: 0 1px 3px rgba(0,0,0,0.45); }}
+        .tl-old {{ background: linear-gradient(135deg, #e67e22, #d35400); }}
+        .tl-new {{ background: linear-gradient(135deg, #27ae60, #1e8449); }}
+        .tl-gap {{ background: linear-gradient(135deg, #c0392b, #922b21); }}
+        .tl-info {{ display: flex; justify-content: space-between; margin-top: 5px; font-size: 0.82em; flex-wrap: wrap; gap: 4px; padding: 0 2px; }}
+        .tl-info-active {{ font-weight: bold; }}
+        .tl-old-text {{ color: #d35400; }}
+        .tl-new-text {{ color: #1e8449; }}
+        .tl-info-gap {{ color: #c0392b; font-weight: bold; }}
+        .tl-info-none {{ color: #2980b9; font-weight: bold; }}
+        .tl-info-cd {{ color: #555; }}
     </style>
 </head>
 <body>
@@ -267,12 +321,14 @@ html_body = f"""
                 <strong>旧仕様（装備加算＋ヴィス乗算）:</strong><br>
                 最終持続時間: <span class="old-spec">{old_duration_pve:.2f} 秒</span><br>
                 空白の時間: {"<span class='zero-downtime'>0.00 秒 (常時維持)</span>" if downtime_old_pve == 0.0 else f"<span class='downtime'>{downtime_old_pve:.2f} 秒</span>"}
+                {timeline_old_pve}
             </div>
 
             <div class="detail-row">
                 <strong>新仕様（すべて加算）:</strong><br>
                 最終持続時間: <span class="new-spec">{new_duration_pve:.2f} 秒</span><br>
                 空白の時間: {"<span class='zero-downtime'>0.00 秒 (常時維持)</span>" if downtime_new_pve == 0.0 else f"<span class='downtime'>{downtime_new_pve:.2f} 秒</span>"}
+                {timeline_new_pve}
             </div>
 
             {cap_info_html_pve}
@@ -280,8 +336,8 @@ html_body = f"""
             <hr style="border: 0; border-top: 1px dashed #ccc; margin: 15px 0;">
             <p style="font-size: 0.9em; color: #555;">
             ⚠️ <strong>アップデートによる影響:</strong><br>
-            持続時間が <span class="diff">{abs(duration_diff_pve):.2f} 秒</span> 減少しました。<br>
-            空白の時間が <span class="diff">{abs(downtime_diff_pve):.2f} 秒</span> 増加しました。
+            持続時間: {"変化なし" if abs(duration_diff_pve) < 0.005 else f"<span class='diff'>{abs(duration_diff_pve):.2f} 秒減少</span>"}<br>
+            空白の時間: {"変化なし" if abs(downtime_diff_pve) < 0.005 else f"<span class='diff'>{abs(downtime_diff_pve):.2f} 秒増加</span>"}
             </p>
         </div>
 
@@ -293,12 +349,14 @@ html_body = f"""
                 <strong>旧仕様（装備加算＋ヴィス乗算）:</strong><br>
                 最終持続時間: <span class="old-spec">{old_duration_pvp:.2f} 秒</span><br>
                 空白の時間: {"<span class='zero-downtime'>0.00 秒 (常時維持)</span>" if downtime_old_pvp == 0.0 else f"<span class='downtime'>{downtime_old_pvp:.2f} 秒</span>"}
+                {timeline_old_pvp}
             </div>
 
             <div class="detail-row">
                 <strong>新仕様（すべて加算）:</strong><br>
                 最終持続時間: <span class="new-spec">{new_duration_pvp:.2f} 秒</span><br>
                 空白の時間: {"<span class='zero-downtime'>0.00 秒 (常時維持)</span>" if downtime_new_pvp == 0.0 else f"<span class='downtime'>{downtime_new_pvp:.2f} 秒</span>"}
+                {timeline_new_pvp}
             </div>
 
             {cap_info_html_pvp}
@@ -306,8 +364,8 @@ html_body = f"""
             <hr style="border: 0; border-top: 1px dashed #ccc; margin: 15px 0;">
             <p style="font-size: 0.9em; color: #555;">
             ⚠️ <strong>アップデートによる影響:</strong><br>
-            持続時間が <span class="diff">{abs(duration_diff_pvp):.2f} 秒</span> 減少しました。<br>
-            空白の時間が <span class="diff">{abs(downtime_diff_pvp):.2f} 秒</span> 増加しました。
+            持続時間: {"変化なし" if abs(duration_diff_pvp) < 0.005 else f"<span class='diff'>{abs(duration_diff_pvp):.2f} 秒減少</span>"}<br>
+            空白の時間: {"変化なし" if abs(downtime_diff_pvp) < 0.005 else f"<span class='diff'>{abs(downtime_diff_pvp):.2f} 秒増加</span>"}
             </p>
         </div>
     </div>
